@@ -1,0 +1,255 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QueryDesk – AI customer query management</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230e7c7b'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h8' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{% static 'web/app.css' %}">
+</head>
+<body>
+
+<!-- ========== Auth screen ========== -->
+<main id="auth-view" class="auth" hidden>
+  <section class="auth-intro">
+    <div class="brand brand-lg"><span class="brand-mark" aria-hidden="true"></span>QueryDesk</div>
+    <h1>Every customer query, sorted before you open it.</h1>
+    <p>Log queries, let AI pick the category and priority, and send a ready-to-edit reply. Track each one until it is resolved.</p>
+    <div class="sample" aria-hidden="true">
+      <p class="sample-text">“My payment has been deducted twice, but my subscription is still not activated.”</p>
+      <div class="sample-result">
+        <span class="badge cat">Billing</span>
+        <span class="badge pri-high">High priority</span>
+      </div>
+      <p class="sample-reply">We apologise for the inconvenience. Our team will verify the payment transaction and help activate your subscription.</p>
+    </div>
+  </section>
+
+  <section class="auth-card" aria-label="Sign in or create an account">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-login" aria-selected="true" data-tab="login">Log in</button>
+      <button role="tab" id="tab-register" aria-selected="false" data-tab="register">Create account</button>
+    </div>
+
+    <form id="login-form" novalidate>
+      <div class="alert error" id="login-alert" hidden role="alert"></div>
+      <label class="field">Username
+        <input name="username" autocomplete="username" required>
+        <small class="err" data-for="username"></small>
+      </label>
+      <label class="field">Password
+        <input name="password" type="password" autocomplete="current-password" required>
+        <small class="err" data-for="password"></small>
+      </label>
+      <button class="btn primary block" type="submit">Log in</button>
+    </form>
+
+    <form id="register-form" novalidate hidden>
+      <div class="alert error" id="register-alert" hidden role="alert"></div>
+      <label class="field">Username
+        <input name="username" autocomplete="username" required>
+        <small class="err" data-for="username"></small>
+      </label>
+      <label class="field">Email
+        <input name="email" type="email" autocomplete="email" required>
+        <small class="err" data-for="email"></small>
+      </label>
+      <label class="field">Password
+        <input name="password" type="password" autocomplete="new-password" required minlength="8">
+        <small class="hint">At least 8 characters, not too common, not all numbers.</small>
+        <small class="err" data-for="password"></small>
+      </label>
+      <button class="btn primary block" type="submit">Create account</button>
+    </form>
+  </section>
+</main>
+
+<!-- ========== App shell ========== -->
+<div id="app-view" class="shell" hidden>
+  <aside class="side">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span>QueryDesk</div>
+    <nav class="nav" aria-label="Main">
+      <a href="#/dashboard" data-route="dashboard">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z"/></svg>
+        Dashboard
+      </a>
+      <a href="#/queries" data-route="queries">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v2H4V6Zm0 5h16v2H4v-2Zm0 5h10v2H4v-2Z"/></svg>
+        Queries
+      </a>
+      <a href="/api/docs/" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.6 16.6 4 12l4.6-4.6L10 8.8 6.8 12l3.2 3.2-1.4 1.4Zm6.8 0-1.4-1.4 3.2-3.2L14 8.8l1.4-1.4L20 12l-4.6 4.6Z"/></svg>
+        API docs
+      </a>
+    </nav>
+    <div class="side-foot">
+      <div class="who"><span class="avatar" id="user-avatar">?</span><span id="user-name"></span></div>
+      <button class="btn ghost-light" id="logout-btn" type="button">Log out</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <h2 id="page-title">Dashboard</h2>
+      <button class="btn primary" id="new-query-btn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"/></svg>
+        New query
+      </button>
+    </header>
+
+    <!-- Dashboard -->
+    <section id="page-dashboard" class="page" hidden>
+      <div class="stats" id="stats"></div>
+      <div class="split">
+        <div class="panel">
+          <h3>By category</h3>
+          <div id="chart-category" class="bars"></div>
+        </div>
+        <div class="panel">
+          <h3>By priority</h3>
+          <div id="chart-priority" class="bars"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Latest queries</h3>
+          <a href="#/queries" class="link">View all queries</a>
+        </div>
+        <div id="recent-list" class="recent"></div>
+      </div>
+    </section>
+
+    <!-- Queries -->
+    <section id="page-queries" class="page" hidden>
+      <div class="filters">
+        <label class="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20.7 19.3-4.4-4.4a7 7 0 1 0-1.4 1.4l4.4 4.4 1.4-1.4ZM5 10a5 5 0 1 1 10 0 5 5 0 0 1-10 0Z"/></svg>
+          <input id="f-search" type="search" placeholder="Search by customer name or email" aria-label="Search by customer name or email">
+        </label>
+        <select id="f-category" aria-label="Filter by category">
+          <option value="">All categories</option>
+          <option>Technical</option><option>Billing</option><option>General</option><option>Account Related</option>
+        </select>
+        <select id="f-priority" aria-label="Filter by priority">
+          <option value="">All priorities</option>
+          <option>High</option><option>Medium</option><option>Low</option>
+        </select>
+        <select id="f-status" aria-label="Filter by status">
+          <option value="">All statuses</option>
+          <option>Pending</option><option>In Progress</option><option>Resolved</option>
+        </select>
+        <select id="f-order" aria-label="Sort order">
+          <option value="-created_at">Newest first</option>
+          <option value="created_at">Oldest first</option>
+        </select>
+        <button class="btn quiet" id="f-reset" type="button">Clear filters</button>
+      </div>
+
+      <div class="panel table-wrap">
+        <table class="table" id="query-table">
+          <thead>
+            <tr><th>Customer</th><th>Subject</th><th>Category</th><th>Priority</th><th>Status</th><th>Created</th></tr>
+          </thead>
+          <tbody id="query-rows"></tbody>
+        </table>
+        <div id="query-empty" class="empty" hidden></div>
+        <div id="query-loading" class="loading" hidden>Loading queries…</div>
+      </div>
+
+      <nav class="pager" id="pager" aria-label="Pagination" hidden>
+        <button class="btn quiet" id="prev-page" type="button">Previous</button>
+        <span id="page-info"></span>
+        <button class="btn quiet" id="next-page" type="button">Next</button>
+      </nav>
+    </section>
+  </div>
+</div>
+
+<!-- ========== Detail drawer ========== -->
+<div id="drawer-backdrop" class="backdrop" hidden></div>
+<aside id="drawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
+  <div class="drawer-head">
+    <div>
+      <h3 id="drawer-title"></h3>
+      <p id="drawer-sub" class="muted"></p>
+    </div>
+    <button class="icon-btn" id="drawer-close" type="button" aria-label="Close">
+      <svg viewBox="0 0 24 24"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4 6.4 5Z"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
+
+<!-- ========== Form modal ========== -->
+<div id="modal-backdrop" class="backdrop" hidden></div>
+<div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+  <form id="query-form" novalidate>
+    <div class="modal-head">
+      <h3 id="modal-title">New query</h3>
+      <button class="icon-btn" type="button" id="modal-close" aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4 6.4 5Z"/></svg>
+      </button>
+    </div>
+    <div class="alert error" id="form-alert" hidden role="alert"></div>
+    <div class="grid2">
+      <label class="field">Customer name
+        <input name="customer_name" required maxlength="100">
+        <small class="err" data-for="customer_name"></small>
+      </label>
+      <label class="field">Email address
+        <input name="email" type="email" required>
+        <small class="err" data-for="email"></small>
+      </label>
+    </div>
+    <label class="field">Subject
+      <input name="subject" required maxlength="200">
+      <small class="err" data-for="subject"></small>
+    </label>
+    <label class="field">Description
+      <textarea name="description" rows="5" required placeholder="What is the customer asking or reporting?"></textarea>
+      <small class="err" data-for="description"></small>
+    </label>
+    <div class="grid3">
+      <label class="field">Category
+        <select name="category">
+          <option value="">Not set (let AI decide)</option>
+          <option>Technical</option><option>Billing</option><option>General</option><option>Account Related</option>
+        </select>
+        <small class="err" data-for="category"></small>
+      </label>
+      <label class="field">Priority
+        <select name="priority"><option>Low</option><option selected>Medium</option><option>High</option></select>
+        <small class="err" data-for="priority"></small>
+      </label>
+      <label class="field">Status
+        <select name="status"><option>Pending</option><option>In Progress</option><option>Resolved</option></select>
+        <small class="err" data-for="status"></small>
+      </label>
+    </div>
+    <label class="check" id="auto-ai-wrap">
+      <input type="checkbox" name="auto_ai" checked>
+      <span>Run AI analysis after saving <em>(sets category, priority and a suggested reply)</em></span>
+    </label>
+    <div class="modal-foot">
+      <button class="btn quiet" type="button" id="modal-cancel">Cancel</button>
+      <button class="btn primary" type="submit" id="modal-save">Save query</button>
+    </div>
+  </form>
+</div>
+
+<!-- ========== Confirm dialog ========== -->
+<div id="confirm-backdrop" class="backdrop top" hidden></div>
+<div id="confirm" class="modal small top" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
+  <h3 id="confirm-title">Delete this query?</h3>
+  <p id="confirm-text" class="muted"></p>
+  <div class="modal-foot">
+    <button class="btn quiet" type="button" id="confirm-cancel">Keep it</button>
+    <button class="btn danger" type="button" id="confirm-ok">Delete query</button>
+  </div>
+</div>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<script src="{% static 'web/app.js' %}"></script>
+</body>
+</html>
